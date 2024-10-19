@@ -4,6 +4,7 @@ import os
 import glob
 import numpy as np
 import math
+import concurrent.futures
 
 
 class VectorSpace:
@@ -16,7 +17,7 @@ class VectorSpace:
     documentVectors = []
 
     #Mapping of vector index to keyword
-    vectorKeywordIndex=[]
+    vectorKeywordIndex={}
 
     # Number of the index
     indexNumber = []
@@ -34,10 +35,17 @@ class VectorSpace:
     def build(self,documents):
         """ Create the vector space for the passed document strings """
         self.vectorKeywordIndex = self.getVectorKeywordIndex(documents)
-        self.documentVectors = [self.makeVector(document) for document in documents]
+        self.documentVectors = [self.makeVector(document, True) for document in documents]
+
+
+        # with concurrent.futures.ProcessPoolExecutor() as executor:
+            # self.documentVectors = list(executor.map(self.buildVector, documents))
+
         self.tfidf_emulator = self.create_tfidf_emulator()
 
 
+    def buildVector(self, doc):
+        return self.makeVector(doc, True)
 
     def getVectorKeywordIndex(self, documentList):
         """ create the keyword associated to the position of the elements within the document vectors """
@@ -62,7 +70,7 @@ class VectorSpace:
         return vectorIndex  #(keyword:position)
 
 
-    def makeVector(self, wordString):
+    def makeVector(self, wordString, create: bool):
         """ @pre: unique(vectorIndex) """
 
         #Initialise vector with 0's
@@ -70,45 +78,26 @@ class VectorSpace:
         wordList = self.parser.tokenise(wordString)
         wordList = self.parser.removeStopWords(wordList)
         for word in wordList:
-            if vector[self.vectorKeywordIndex[word]] == 0:
+            if create and vector[self.vectorKeywordIndex[word]] == 0:
                 self.indexNumber[self.vectorKeywordIndex[word]] += 1
 
             vector[self.vectorKeywordIndex[word]] += 1; #Use simple Term Count Model
+
 
         return vector
 
 
     def buildQueryVector(self, termList):
         """ convert query string into a term vector """
-        termList: list = [term for term in termList if term in self.vectorKeywordIndex]
-        query = self.makeVector(" ".join(termList))
+        termList: list = [term for term in termList if term.lower() in self.vectorKeywordIndex]
+        query = self.makeVector(" ".join(termList), False)
+
         return query
 
 
     def related(self,documentId):
         """ find documents that are related to the document indexed by passed Id within the document Vectors"""
         ratings = [util.cosine(self.documentVectors[documentId], documentVector) for documentVector in self.documentVectors]
-        #ratings.sort(reverse=True)
-        return ratings
-
-
-    def search_tf_cosine(self,searchList):
-        print("TF Weighting (Raw TF in course PPT) + Cosine Similarity")
-        """ search for documents that match based on a list of terms """
-        queryVector = self.buildQueryVector(searchList)
-
-        ratings = [util.cosine(queryVector, documentVector) for documentVector in self.documentVectors]
-        #ratings.sort(reverse=True)
-        return ratings
-
-
-
-    def search_tf_euclidean(self,searchList):
-        print("TF Weighting (Raw TF in course PPT) + Euclidean Distance")
-        """ search for documents that match based on a list of terms """
-        queryVector = self.buildQueryVector(searchList)
-
-        ratings = [util.euclidean(queryVector, documentVector) for documentVector in self.documentVectors]
         #ratings.sort(reverse=True)
         return ratings
 
@@ -130,13 +119,39 @@ class VectorSpace:
 
         return tfidf_emulator
 
+    def search_tf_cosine(self,searchList):
+        print("TF Weighting (Raw TF in course PPT) + Cosine Similarity")
+        """ search for documents that match based on a list of terms """
+        queryVector = self.buildQueryVector(searchList)
+
+        ratings = [util.cosine(queryVector, documentVector) for documentVector in self.documentVectors]
+        #ratings.sort(reverse=True)
+        return ratings
+
+    def search_tf_euclidean(self,searchList):
+        print("TF Weighting (Raw TF in course PPT) + Euclidean Distance")
+        """ search for documents that match based on a list of terms """
+        queryVector = self.buildQueryVector(searchList)
+
+        ratings = [util.euclidean(queryVector, documentVector) for documentVector in self.documentVectors]
+        #ratings.sort(reverse=True)
+        return ratings
+
 
     def search_tfidf_cosine(self,searchList):
         print("TF-IDF Weighting (Raw TF in course PPT) + Cosine Similarity")
         """ search for documents that match based on a list of terms """
+
+
         queryVector = self.buildQueryVector(searchList)
         queryVector_tfidf = self.vector_to_tfidf(queryVector)
 
+
+        # with concurrent.futures.ProcessPoolExecutor() as executor:
+            # rating = list(executor.map(
+                # util.cosine(queryVector_tfidf, self.tfidf_emulator(doc_index)),
+                # range(len(self.documentVectors)))
+                # )
         ratings = [util.cosine(queryVector_tfidf, self.tfidf_emulator(i)) for i in range(len(self.documentVectors))]
         #ratings.sort(reverse=True)
         return ratings
@@ -147,20 +162,17 @@ class VectorSpace:
         print("TF-IDF Weighting (Raw TF in course PPT) + Euclidean Distance")
         """ search for documents that match based on a list of terms """
         queryVector = self.buildQueryVector(searchList)
+        queryVector_tfidf = self.vector_to_tfidf(queryVector)
 
-        ratings = [util.cosine(queryVector, self.tfidf_emulator(i)) for i in range(len(self.documentVectors))]
+        ratings = [util.euclidean(queryVector_tfidf, self.tfidf_emulator(i)) for i in range(len(self.documentVectors))]
         #ratings.sort(reverse=True)
         return ratings
 
-
-
-if __name__ == '__main__':
-
-
-
+def main():
     #test data
     documents: list  = []
 
+    # directory_path = os.path.join(os.getcwd(), "EnglishNews")
     directory_path = os.path.join(os.getcwd(), "EnglishNews")
 
     txt_files = glob.glob(os.path.join(directory_path, "*.txt"))
@@ -175,21 +187,8 @@ if __name__ == '__main__':
             i += 1
         file.close()
 
-
-
-
-
-    # print(f'len of documents: {len(documents)}')
-
-    # documents = ["The cat in the hat disabled",
-                 # "A cat is a fine pet ponies.",
-                 # "Dogs and cats make good pets.",
-                 # "I haven't got a hat."]
-
     # documents = documents[:10]
     vectorSpace = VectorSpace(documents)
-
-
 
     # problem. 1 - 1
     arr = vectorSpace.search_tf_cosine(["Typhoon", "Taiwan", "war"])
@@ -219,4 +218,7 @@ if __name__ == '__main__':
     for indice in top_10_indices:
         idx = int(indice)
         print(id_name[idx], arr[idx])
-###################################################
+
+
+if __name__ == '__main__':
+    main()

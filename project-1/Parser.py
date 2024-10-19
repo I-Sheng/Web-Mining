@@ -21,7 +21,6 @@ class Parser:
         string = string.lower()
         return string
 
-
     def removeStopWords(self,list):
         """ Remove common words which have no search value """
         return [word for word in list if word not in self.stopwords ]

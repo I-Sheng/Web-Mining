@@ -1,4 +1,5 @@
 import sys
+import math
 
 #http://www.scipy.org/
 try:
@@ -16,7 +17,7 @@ def euclidean(vector1, vector2):
     if sum(vector1) == 0 or sum(vector2) == 0:
         return 0
 
-    return float(dot(vector1,vector2)) / norm(vector2)
+    return math.sqrt(sum((x - y) ** 2 for x, y in zip(vector1, vector2)))
 
 def cosine(vector1, vector2):
     """ related documents j and q are in the concept space by comparing the vectors :
@@ -26,7 +27,6 @@ def cosine(vector1, vector2):
         return 0
 
     if sum(vector2) == 0:
-        # print("Here vector2 is 0")
         return 0
 
     return float(dot(vector1,vector2) / (norm(vector1) * norm(vector2)))
