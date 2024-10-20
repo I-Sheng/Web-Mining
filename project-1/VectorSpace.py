@@ -112,11 +112,13 @@ class VectorSpace:
         return vector
 
 
-    def buildQueryVector(self, termList):
+    def buildQueryVector(self, string):
         """ convert query string into a term vector """
 
-        if termList != "English":
-            termList = jieba.lcut(termList)
+        if self.lang == "English":
+            termList = string.split(" ")
+        else:
+            termList = jieba.lcut(string)
 
         termList: list = [term for term in termList if term.lower() in self.vectorKeywordIndex]
         query = self.makeVector(" ".join(termList), False)
@@ -268,6 +270,29 @@ class VectorSpace:
         #ratings.sort(reverse=True)
         return ratings
 
+
+    def MAP_10(self, queryList, answerList):
+        if len(queryList) != len(answerList):
+            print("Here is error, qyeryList size is not equal to answerList")
+            return
+
+        def element_answer(top_10_indices, answer):
+            return len(set(top_10_indices) & set(answer))
+
+        size: int = len(queryList)
+        total = 0
+        top_10_list = []
+        for i in range(size):
+            query = queryList[i]
+            answer = answerList[i]
+            arr = vectorSpace.search_tfidf_cosine(query)
+            top_10_indices = np.argsort(arr)[-10:][::-1]
+            top_10_list.append(top_10_indices)
+
+        total = sum(list(map(element_in_answer, top_10_list, answerList)))
+
+        return total / size
+
 class Solutions():
     def p12():
         print("Problem1:")
@@ -293,14 +318,14 @@ class Solutions():
         vectorSpace = VectorSpace(documents)
 
         # problem. 1 - 1
-        arr = vectorSpace.search_tf_cosine(["Typhoon", "Taiwan", "war"])
+        arr = vectorSpace.search_tf_cosine("Typhoon Taiwan war")
         top_10_indices = np.argsort(arr)[-10:][::-1]
         for indice in top_10_indices:
             idx = int(indice)
             print(id_name[idx], arr[idx])
 
         # problem. 1 - 2
-        arr = vectorSpace.search_tfidf_cosine(["Typhoon", "Taiwan", "war"])
+        arr = vectorSpace.search_tfidf_cosine("Typhoon Taiwan war")
         top_10_indices = np.argsort(arr)[-10:][::-1]
         for indice in top_10_indices:
             idx = int(indice)
@@ -308,14 +333,14 @@ class Solutions():
 
 
         # problem. 1 - 3
-        arr = vectorSpace.search_tf_euclidean(["Typhoon", "Taiwan", "war"])
+        arr = vectorSpace.search_tf_euclidean("Typhoon Taiwan war")
         top_10_indices = np.argsort(arr)[:10]
         for indice in top_10_indices:
             idx = int(indice)
             print(id_name[idx], arr[idx])
 
         # problem. 1 - 4
-        arr = vectorSpace.search_tfidf_euclidean(["Typhoon", "Taiwan", "war"])
+        arr = vectorSpace.search_tfidf_euclidean("Typhoon Taiwan war")
         top_10_indices = np.argsort(arr)[:10]
         for indice in top_10_indices:
             idx = int(indice)
@@ -324,14 +349,14 @@ class Solutions():
 
         print("Problem2:")
         # problem. 2 - 1
-        arr = vectorSpace.relevant_search_tf_cosine(["Typhoon", "Taiwan", "war"])
+        arr = vectorSpace.relevant_search_tf_cosine("Typhoon Taiwan war")
         top_10_indices = np.argsort(arr)[-10:][::-1]
         for indice in top_10_indices:
             idx = int(indice)
             print(id_name[idx], arr[idx])
 
         # problem. 2 - 2
-        arr = vectorSpace.relevant_search_tfidf_cosine(["Typhoon", "Taiwan", "war"])
+        arr = vectorSpace.relevant_search_tfidf_cosine("Typhoon Taiwan war")
         top_10_indices = np.argsort(arr)[-10:][::-1]
         for indice in top_10_indices:
             idx = int(indice)
@@ -339,14 +364,14 @@ class Solutions():
 
 
         # problem. 2 - 3
-        arr = vectorSpace.relevant_search_tf_euclidean(["Typhoon", "Taiwan", "war"])
+        arr = vectorSpace.relevant_search_tf_euclidean("Typhoon Taiwan war")
         top_10_indices = np.argsort(arr)[:10]
         for indice in top_10_indices:
             idx = int(indice)
             print(id_name[idx], arr[idx])
 
         # problem. 2 - 4
-        arr = vectorSpace.relevant_search_tfidf_euclidean(["Typhoon", "Taiwan", "war"])
+        arr = vectorSpace.relevant_search_tfidf_euclidean("Typhoon Taiwan war")
         top_10_indices = np.argsort(arr)[:10]
         for indice in top_10_indices:
             idx = int(indice)
@@ -389,10 +414,39 @@ class Solutions():
         for indice in top_10_indices:
             idx = int(indice)
             print(id_name[idx], arr[idx])
+        print("\n\n\n")
+
+    def p4():
+        print("Problem4:")
+        #test data
+        documents: list  = []
+
+        # directory_path = os.path.join(os.getcwd(), "EnglishNews")
+        directory_path = os.path.join(os.getcwd(), "smaller_dataset", "collections")
+        queries_path = os.path.join(os.getcwd(), "smaller_dataset", "queries")
+
+        txt_files = glob.glob(os.path.join(directory_path, "*.txt"))
+        queries_files = glob.glob(os.path.join(queries_path, "*.txt"))
+
+        i: int = 0
+        id_name :dict = {}
+        for file_path in txt_files:
+            with open(file_path, 'r', encoding = 'utf-8') as file:
+                content = file.read()
+                documents.append(content)
+                id_name[i] = os.path.basename(file_path)
+                i += 1
+            file.close()
+        # query & answer 如何帶入MAP未完成
+        # documents = documents[:10]
+        vectorSpace = VectorSpace(documents)
+
+
 
 
 
 if __name__ == '__main__':
     # Solutions.p12()
-    Solutions.p3()
+    # Solutions.p3()
+    Solutions.p4()
 
