@@ -14,8 +14,8 @@ def removeDuplicates(list):
     return set((item for item in list))
 
 def euclidean(vector1, vector2):
-    if sum(vector1) == 0 or sum(vector2) == 0:
-        return 0
+    if sum(vector1) == 0 and sum(vector2) == 0:
+        return float('inf')
 
     return math.sqrt(sum((x - y) ** 2 for x, y in zip(vector1, vector2)))
 
