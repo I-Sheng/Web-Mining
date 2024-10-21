@@ -21,8 +21,6 @@ nltk.download('averaged_perceptron_tagger', download_dir=data_path)
 print('\n\n')
 
 
-
-
 class VectorSpace:
     """ A algebraic model for representing text documents as vectors of identifiers.
     A document is represented as a vector. Each dimension of the vector corresponds to a
@@ -270,27 +268,110 @@ class VectorSpace:
             print("TF-IDF Weighting (Raw TF in course PPT) + Euclidean Distance")
         return self.relevant_search_tfidf(searchList, util.euclidean)
 
-    def MAP_10(self, queryList, answerList):
+    def MAP_10(self, queryList, answerList, matrix):
         if len(queryList) != len(answerList):
-            print("Here is error, qyeryList size is not equal to answerList")
+            print("Error: queryList isze is not equal to answerList")
             return
 
-        def element_answer(top_10_indices, answer):
-            return len(set(top_10_indices) & set(answer))
+        def average_precision(top_10_indices, answer):
+            hits: int = 0
+            sum_precision = 0
+            for i, idx in enumerate(top_10_indices, 1):
+                if idx in answer:
+                    hits += 1
+                    sum_precision += hits / i
+            return sum_precision / min(len(answer), 10); # This may improve
+            # return sum_precision / 10
 
-        size: int = len(queryList)
+        size = len(queryList)
         total = 0
-        top_10_list = []
-        for i in range(size):
+        def process_query(i):
             query = queryList[i]
             answer = answerList[i]
-            arr = self.search_tfidf_cosine(query, False)
-            top_10_indices = np.argsort(arr)[-10:][::-1]
-            top_10_list.append(top_10_indices)
+            arr = matrix(query, False)
+            if matrix.__name__.endswith('cosine'):
+                top_10_indices = np.argsort(arr)[-10:][::-1]
+            else:
+                top_10_indices = np.argsort(arr)[:10]
 
-        total = sum(list(map(element_answer, top_10_list, answerList)))
-        print(f'MAP@10      {total/size}')
-        return
+            return average_precision(top_10_indices, answer)
+
+        total = sum(map(process_query, range(len(queryList))))
+        map_score = total / size
+        print(f'MAP@10:         {map_score:.6f}')
+
+    def MRR_10(self, queryList, answerList, matrix):
+        size = len(queryList)
+        if size != len(answerList):
+            print("Error: queryList isze is not equal to answerList")
+            return
+
+        def RR(top_10_indices, answer):
+            for i in range(1, 11, 1):
+                if top_10_indices[i-1] in answer:
+                    return 1 / i
+            return 0
+
+        def process_query(i):
+            query = queryList[i]
+            answer = answerList[i]
+            arr = matrix(query, False)
+            if matrix.__name__.endswith('cosine'):
+                top_10_indices = np.argsort(arr)[-10:][::-1]
+            else:
+                top_10_indices = np.argsort(arr)[:10]
+
+            return RR(top_10_indices, answer)
+
+        total = sum(map(process_query, range(len(queryList))))
+        map_score = total / size
+        print(f'MRR@10:         {map_score:.6f}')
+
+
+
+    def RECALL_10(self, queryList, answerList, matrix):
+        size = len(queryList)
+        if size != len(answerList):
+            print("Error: queryList isze is not equal to answerList")
+            return
+
+        def Recall(top_10_indices, answer):
+            return len(set(top_10_indices) & set(answer)) / len(answer)
+
+        def process_query(i):
+            query = queryList[i]
+            answer = answerList[i]
+            arr = matrix(query, False)
+            if matrix.__name__.endswith('cosine'):
+                top_10_indices = np.argsort(arr)[-10:][::-1]
+            else:
+                top_10_indices = np.argsort(arr)[:10]
+
+            return Recall(top_10_indices, answer)
+
+        total = sum(map(process_query, range(len(queryList))))
+        map_score = total / size
+        print(f'RECALL@10:  {map_score:.6f}')
+
+
+
+
+    def evaluate(self, queryList, answerList):
+
+        print("Thank you for your patience, this might take a moment.")
+        matrices = [self.search_tf_cosine, self.search_tfidf_cosine, self.search_tf_euclidean, self.search_tfidf_euclidean ]
+        description = ['TF Cosine', 'TF-IDF Cosine', 'TF Euclidean', 'TF-IDF Euclidean']
+
+        def evaluate_matrix(matrix):
+            self.MAP_10(queryList, answerList, matrix)
+            self.MRR_10(queryList, answerList, matrix)
+            self.RECALL_10(queryList, answerList, matrix)
+
+        for i in range(4):
+            print(description[i])
+            print('---------------------------')
+            evaluate_matrix(matrices[i])
+            print('---------------------------')
 
 class Solutions():
     def p12():
@@ -396,6 +477,9 @@ class Solutions():
 
 
         df = pd.read_csv('./smaller_dataset/rel.tsv', sep='\t', header=None)
+
+        # Convert second column to a list value
+        df[1] = df[1].apply(lambda x: eval(x) if isinstance(x, str) else x)
         df.columns = ['query', 'value']
 
         def query_to_answer(s:str):
@@ -422,11 +506,11 @@ class Solutions():
             file.close()
 
         vectorSpace = VectorSpace(documents, id_name)
-        vectorSpace.MAP_10(queryList, answerList)
+        vectorSpace.evaluate(queryList, answerList)
 
 def main():
-    # Solutions.p12()
-    # Solutions.p3()
+    Solutions.p12()
+    Solutions.p3()
     Solutions.p4()
 
 if __name__ == '__main__':
