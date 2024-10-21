@@ -8,6 +8,7 @@ import nltk
 from nltk import word_tokenize
 from nltk.tag import pos_tag
 import jieba
+import pandas as pd
 
 data_path = os.path.join(os.getcwd(), ".venv")
 nltk.data.path.append(data_path)
@@ -17,6 +18,7 @@ nltk.data.path.append(data_path)
 # nltk.download('averaged_perceptron_tagger_eng', download_dir=data_path)
 nltk.download('punkt', download_dir=data_path)
 nltk.download('averaged_perceptron_tagger', download_dir=data_path)
+print('\n\n')
 
 
 
@@ -35,15 +37,17 @@ class VectorSpace:
 
     # Number of the index
     indexNumber = []
+    id_name :dict = {}
 
     #Tidies terms
     parser=None
 
 
-    def __init__(self, documents=[], lang = "English"):
+    def __init__(self, documents, id_name, lang = "English"):
         self.documentVectors=[]
         self.parser = Parser()
         self.lang = lang
+        self.id_name = id_name
         if(len(documents)>0):
             self.build(documents)
 
@@ -82,7 +86,6 @@ class VectorSpace:
             offset+=1
 
         self.indexNumber = [0 for i in range(len(vectorIndex))]
-
         return vectorIndex  #(keyword:position)
 
 
@@ -150,14 +153,23 @@ class VectorSpace:
 
         return tfidf_emulator
 
-    def search_tf_cosine(self,searchList):
-        print("TF Weighting (Raw TF in course PPT) + Cosine Similarity")
+    def search_tf(self, searchList, distance_matrix):
         """ search for documents that match based on a list of terms """
         queryVector = self.buildQueryVector(searchList)
-
-        ratings = [util.cosine(queryVector, documentVector) for documentVector in self.documentVectors]
-        #ratings.sort(reverse=True)
+        ratings = [distance_matrix(queryVector, documentVector) for documentVector in self.documentVectors]
         return ratings
+
+    def search_tf_cosine(self,searchList, verbose = True):
+        if verbose:
+            print("TF Weighting (Raw TF in course PPT) + Cosine Similarity")
+
+        return self.search_tf(searchList, util.cosine)
+
+    def search_tf_euclidean(self,searchList, verbose = True):
+        if verbose:
+            print("TF Weighting (Raw TF in course PPT) + Euclidean Distance")
+
+        return self.search_tf(searchList, util.euclidean)
 
     def feedback_query(self, idx):
 
@@ -175,101 +187,88 @@ class VectorSpace:
                 v2[i] = 0
             else:
                 v2[i] /= 2
-
         return v2
 
 
-
-
-
-    def relevant_search_tf_cosine(self, searchList):
-        print("TF Weighting (Raw TF in course PPT) + Cosine Similarity")
-        """ search for documents that match based on a list of terms """
+    def relevant_search_tf(self, searchList, distance_matrix):
         queryVector = self.buildQueryVector(searchList)
+        ratings = [distance_matrix(queryVector, documentVector) for documentVector in self.documentVectors]
 
-        ratings = [util.cosine(queryVector, documentVector) for documentVector in self.documentVectors]
-        i = np.argsort(ratings)[-1:][0]
+        if distance_matrix.__name__.endswith("cosine"):
+            i = np.argsort(ratings)[-1:][0]
+        else:
+            i = np.argsort(ratings)[:1][0]
+
         queryVector = [a + b for a, b in zip(queryVector, self.feedback_query(i))]
-        ratings = [util.cosine(queryVector, documentVector) for documentVector in self.documentVectors]
+        return [distance_matrix(queryVector, documentVector) for documentVector in self.documentVectors]
 
-        #ratings.sort(reverse=True)
-        return ratings
-
-    def search_tf_euclidean(self,searchList):
-        print("TF Weighting (Raw TF in course PPT) + Euclidean Distance")
-        """ search for documents that match based on a list of terms """
-        queryVector = self.buildQueryVector(searchList)
-
-        ratings = [util.euclidean(queryVector, documentVector) for documentVector in self.documentVectors]
-        #ratings.sort(reverse=True)
-        return ratings
+    def relevant_search_tf_cosine(self, searchList, verbose = True):
+        if verbose:
+            print("TF Weighting (Raw TF in course PPT) + Cosine Similarity")
+        return self.relevant_search_tf(searchList, util.cosine)
 
 
-    def relevant_search_tf_euclidean(self,searchList):
-        print("TF Weighting (Raw TF in course PPT) + Euclidean Distance")
-        """ search for documents that match based on a list of terms """
-        queryVector = self.buildQueryVector(searchList)
+    def relevant_search_tf_euclidean(self,searchList,verbose = True):
+        if verbose:
+            print("TF Weighting (Raw TF in course PPT) + Euclidean Distance")
+        return self.relevant_search_tf(searchList, util.euclidean)
 
-        ratings = [util.euclidean(queryVector, documentVector) for documentVector in self.documentVectors]
-
-        i = np.argsort(ratings)[:1][0]
-        queryVector = [a + b for a, b in zip(queryVector, self.feedback_query(i))]
-        ratings = [util.euclidean(queryVector, documentVector) for documentVector in self.documentVectors]
-
-        return ratings
-
-
-    def search_tfidf_cosine(self,searchList):
-        print("TF-IDF Weighting (Raw TF in course PPT) + Cosine Similarity")
+    def search_tfidf(self, searchList, distance_matrix):
         """ search for documents that match based on a list of terms """
         queryVector = self.buildQueryVector(searchList)
         queryVector_tfidf = self.vector_to_tfidf(queryVector)
+        return [distance_matrix(queryVector_tfidf, self.tfidf_emulator(i)) for i in range(len(self.documentVectors))]
 
-        ratings = [util.cosine(queryVector_tfidf, self.tfidf_emulator(i)) for i in range(len(self.documentVectors))]
+    def search_tfidf_cosine(self,searchList, verbose = True):
+        if verbose:
+            print("TF-IDF Weighting (Raw TF in course PPT) + Cosine Similarity")
 
-        return ratings
+        return self.search_tfidf(searchList, util.cosine)
 
 
-    def relevant_search_tfidf_cosine(self,searchList):
-        print("TF-IDF Weighting (Raw TF in course PPT) + Cosine Similarity")
+    def search_tfidf_euclidean(self,searchList, verbose = True):
+        if verbose:
+            print("TF-IDF Weighting (Raw TF in course PPT) + Euclidean Distance")
+
+        return self.search_tfidf(searchList, util.euclidean)
+
+    def print_top_ten(self, arr, matrix: str):
+        if matrix == 'cosine':
+            top_10_indices = np.argsort(arr)[-10:][::-1]
+        else:
+            top_10_indices = np.argsort(arr)[:10]
+
+        for indice in top_10_indices:
+            idx = int(indice)
+            print(self.id_name[idx], arr[idx])
+
+        print('-----------------------------------')
+
+    def relevant_search_tfidf(self, searchList, distance_matrix):
         """ search for documents that match based on a list of terms """
         queryVector = self.buildQueryVector(searchList)
         queryVector_tfidf = self.vector_to_tfidf(queryVector)
+        ratings = [distance_matrix(queryVector_tfidf, self.tfidf_emulator(i)) for i in range(len(self.documentVectors))]
 
-        ratings = [util.cosine(queryVector_tfidf, self.tfidf_emulator(i)) for i in range(len(self.documentVectors))]
 
-        i = np.argsort(ratings)[-1:][0]
-        queryVector = [a + b for a, b in zip(queryVector, self.feedback_query(i))]
-        queryVector_tfidf = self.vector_to_tfidf(queryVector)
-        ratings = [util.cosine(queryVector_tfidf, self.tfidf_emulator(i)) for i in range(len(self.documentVectors))]
-
-        return ratings
-
-    def search_tfidf_euclidean(self,searchList):
-        print("TF-IDF Weighting (Raw TF in course PPT) + Euclidean Distance")
-        """ search for documents that match based on a list of terms """
-        queryVector = self.buildQueryVector(searchList)
-        queryVector_tfidf = self.vector_to_tfidf(queryVector)
-
-        ratings = [util.euclidean(queryVector_tfidf, self.tfidf_emulator(i)) for i in range(len(self.documentVectors))]
-        #ratings.sort(reverse=True)
-        return ratings
-
-    def relevant_search_tfidf_euclidean(self,searchList):
-        print("TF-IDF Weighting (Raw TF in course PPT) + Euclidean Distance")
-        """ search for documents that match based on a list of terms """
-        queryVector = self.buildQueryVector(searchList)
-        queryVector_tfidf = self.vector_to_tfidf(queryVector)
-
-        ratings = [util.euclidean(queryVector_tfidf, self.tfidf_emulator(i)) for i in range(len(self.documentVectors))]
-
-        i = np.argsort(ratings)[0]
+        if distance_matrix.__name__.endswith("cosine"):
+            i = np.argsort(ratings)[-1:][0]
+        else:
+            i = np.argsort(ratings)[:1][0]
         queryVector = [a + b for a, b in zip(queryVector, self.feedback_query(i))]
         queryVector_tfidf = self.vector_to_tfidf(queryVector)
-        ratings = [util.euclidean(queryVector_tfidf, self.tfidf_emulator(i)) for i in range(len(self.documentVectors))]
-        #ratings.sort(reverse=True)
-        return ratings
 
+        return [distance_matrix(queryVector_tfidf, self.tfidf_emulator(i)) for i in range(len(self.documentVectors))]
+
+    def relevant_search_tfidf_cosine(self,searchList, verbose = True):
+        if verbose:
+            print("TF-IDF Weighting (Raw TF in course PPT) + Cosine Similarity")
+        return self.relevant_search_tfidf(searchList, util.cosine)
+
+    def relevant_search_tfidf_euclidean(self,searchList, verbose = True):
+        if verbose:
+            print("TF-IDF Weighting (Raw TF in course PPT) + Euclidean Distance")
+        return self.relevant_search_tfidf(searchList, util.euclidean)
 
     def MAP_10(self, queryList, answerList):
         if len(queryList) != len(answerList):
@@ -285,13 +284,13 @@ class VectorSpace:
         for i in range(size):
             query = queryList[i]
             answer = answerList[i]
-            arr = vectorSpace.search_tfidf_cosine(query)
+            arr = self.search_tfidf_cosine(query, False)
             top_10_indices = np.argsort(arr)[-10:][::-1]
             top_10_list.append(top_10_indices)
 
-        total = sum(list(map(element_in_answer, top_10_list, answerList)))
-
-        return total / size
+        total = sum(list(map(element_answer, top_10_list, answerList)))
+        print(f'MAP@10      {total/size}')
+        return
 
 class Solutions():
     def p12():
@@ -315,67 +314,41 @@ class Solutions():
             file.close()
 
         # documents = documents[:10]
-        vectorSpace = VectorSpace(documents)
+        vectorSpace = VectorSpace(documents, id_name)
 
         # problem. 1 - 1
         arr = vectorSpace.search_tf_cosine("Typhoon Taiwan war")
-        top_10_indices = np.argsort(arr)[-10:][::-1]
-        for indice in top_10_indices:
-            idx = int(indice)
-            print(id_name[idx], arr[idx])
+        vectorSpace.print_top_ten(arr, 'cosine')
 
         # problem. 1 - 2
         arr = vectorSpace.search_tfidf_cosine("Typhoon Taiwan war")
-        top_10_indices = np.argsort(arr)[-10:][::-1]
-        for indice in top_10_indices:
-            idx = int(indice)
-            print(id_name[idx], arr[idx])
-
+        vectorSpace.print_top_ten(arr, 'cosine')
 
         # problem. 1 - 3
         arr = vectorSpace.search_tf_euclidean("Typhoon Taiwan war")
-        top_10_indices = np.argsort(arr)[:10]
-        for indice in top_10_indices:
-            idx = int(indice)
-            print(id_name[idx], arr[idx])
+        vectorSpace.print_top_ten(arr, 'euclidean')
 
         # problem. 1 - 4
         arr = vectorSpace.search_tfidf_euclidean("Typhoon Taiwan war")
-        top_10_indices = np.argsort(arr)[:10]
-        for indice in top_10_indices:
-            idx = int(indice)
-            print(id_name[idx], arr[idx])
-        print('\n\n\n\n')
+        vectorSpace.print_top_ten(arr, 'euclidean')
 
+        print('\n\n\n\n')
         print("Problem2:")
         # problem. 2 - 1
         arr = vectorSpace.relevant_search_tf_cosine("Typhoon Taiwan war")
-        top_10_indices = np.argsort(arr)[-10:][::-1]
-        for indice in top_10_indices:
-            idx = int(indice)
-            print(id_name[idx], arr[idx])
+        vectorSpace.print_top_ten(arr, 'cosine')
 
         # problem. 2 - 2
         arr = vectorSpace.relevant_search_tfidf_cosine("Typhoon Taiwan war")
-        top_10_indices = np.argsort(arr)[-10:][::-1]
-        for indice in top_10_indices:
-            idx = int(indice)
-            print(id_name[idx], arr[idx])
-
+        vectorSpace.print_top_ten(arr, 'cosine')
 
         # problem. 2 - 3
         arr = vectorSpace.relevant_search_tf_euclidean("Typhoon Taiwan war")
-        top_10_indices = np.argsort(arr)[:10]
-        for indice in top_10_indices:
-            idx = int(indice)
-            print(id_name[idx], arr[idx])
+        vectorSpace.print_top_ten(arr, 'euclidean')
 
         # problem. 2 - 4
         arr = vectorSpace.relevant_search_tfidf_euclidean("Typhoon Taiwan war")
-        top_10_indices = np.argsort(arr)[:10]
-        for indice in top_10_indices:
-            idx = int(indice)
-            print(id_name[idx], arr[idx])
+        vectorSpace.print_top_ten(arr, 'euclidean')
         print('\n\n\n\n')
 
     def p3():
@@ -399,22 +372,15 @@ class Solutions():
             file.close()
 
         # documents = documents[:10]
-        vectorSpace = VectorSpace(documents, lang = "Chinese")
+        vectorSpace = VectorSpace(documents, id_name, lang = "Chinese")
 
         # problem. 3 - 1
         arr = vectorSpace.search_tf_cosine("資安 遊戲")
-        top_10_indices = np.argsort(arr)[-10:][::-1]
-        for indice in top_10_indices:
-            idx = int(indice)
-            print(id_name[idx], arr[idx])
+        vectorSpace.print_top_ten(arr, 'cosine')
 
         # problem. 3 - 2
         arr = vectorSpace.search_tfidf_cosine("資安 遊戲")
-        top_10_indices = np.argsort(arr)[-10:][::-1]
-        for indice in top_10_indices:
-            idx = int(indice)
-            print(id_name[idx], arr[idx])
-        print("\n\n\n")
+        vectorSpace.print_top_ten(arr, 'cosine')
 
     def p4():
         print("Problem4:")
@@ -428,6 +394,13 @@ class Solutions():
         txt_files = glob.glob(os.path.join(directory_path, "*.txt"))
         queries_files = glob.glob(os.path.join(queries_path, "*.txt"))
 
+
+        df = pd.read_csv('./smaller_dataset/rel.tsv', sep='\t', header=None)
+        df.columns = ['query', 'value']
+
+        def query_to_answer(s:str):
+            return df[df['query'] == s].iloc[0,1]
+
         i: int = 0
         id_name :dict = {}
         for file_path in txt_files:
@@ -437,16 +410,24 @@ class Solutions():
                 id_name[i] = os.path.basename(file_path)
                 i += 1
             file.close()
-        # query & answer 如何帶入MAP未完成
-        # documents = documents[:10]
-        vectorSpace = VectorSpace(documents)
 
+        queryList = []
+        answerList = []
+        for query_path in queries_files:
+            with open(query_path, 'r', encoding = 'utf-8') as file:
+                content = file.read()
+                queryList.append(content)
+                query_name = os.path.basename(query_path).split('.')[0]
+                answerList.append(query_to_answer(query_name))
+            file.close()
 
+        vectorSpace = VectorSpace(documents, id_name)
+        vectorSpace.MAP_10(queryList, answerList)
 
-
-
-if __name__ == '__main__':
+def main():
     # Solutions.p12()
     # Solutions.p3()
     Solutions.p4()
 
+if __name__ == '__main__':
+    main()
