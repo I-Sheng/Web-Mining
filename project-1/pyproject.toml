@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "project-1"
+version = "0.1.0"
+description = ""
+authors = ["isheng"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+textblob = "^0.18.0.post0"
+numpy = "^2.1.2"
+nltk = "^3.9.1"
+jieba = "^0.42.1"
+pandas = "^2.2.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,9 @@
+__pypackages__/
+.env
+__pycache__
+
+*log*
+
+tmp.py
+*Try*
+*.swp
